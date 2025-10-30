@@ -3,38 +3,24 @@
     main();
 
     function main() {
-        generateFile();
 
-        $startNano = hrtime(true);
-        $fcfs_res = FCFS();
+        $fcfs = FCFS();
         echo "First-Come First-Serve Algorithm\n";
-        echo $fcfs_res . "\n";
-        $endNano = hrtime(true);
-        $fcfs_time = _calcTime($startNano, $endNano);
+        echo $fcfs;
+        echo "FCFS TAT: " . _calcTAT($fcfs) . "\n\n";
 
-        $startNano = hrtime(true);
         $sjf = SJF();
         echo "Shortest Job First Algorithm\n";
         echo $sjf;
-        $endNano = hrtime(true);
-        $sjf_time = _calctime($startNano, $endNano);
+        echo "SJF TAT: " . _calcTAT($sjf) . "\n\n";
 
-        $startNano = hrtime(true);
-        $rr2 = roundRobin(2);
         echo "Round Robin w/ Time Slice = 2\n";
-        echo $rr2;
-        $endNano = hrtime(true);
-        $rr2_time = _calcTime($startNano, $endNano);
+        $rr2 = roundRobin(2);
+        echo "\nROUND ROBIN-2 TAT: " . _calcRRTAT($rr2) . "\n\n";
 
-        $startNano = hrtime(true);
-        $rr5 = roundRobin(5);
         echo "Round Robin w/ Time Slice = 5\n";
-        echo $rr5;
-        $endNano = hrtime(true);
-        $rr5_time = _calcTime($startNano, $endNano);
-
-        echo "\n\n";
-        echo "FCFS TIME: " . $fcfs_time . "\nSJF TIME: " . $sjf_time . "\nROUND ROBIN-2 TIME: " . $rr2_time . "\nROUND ROBIN-5 TIME: " . $rr5_time;
+        $rr5 = roundRobin(5);
+        echo "\nROUND ROBIN-5 TAT: " . _calcRRTAT($rr5) . "\n\n";
     }
 
     /**
@@ -46,6 +32,33 @@
         $content = "";
 
         $getNumberOfJobs = readline("Enter number of jobs:\n");
+
+        if (is_numeric($getNumberOfJobs)) {
+            $numJobs = (int) $getNumberOfJobs;
+            for ($i = 1; $i <= $numJobs; $i++) {
+                $randNum = random_int(1, 30);
+                $content .= "Job" . $i . "\n" . $randNum . "\n";
+            }
+        } else {
+            exit("bruh that shi is not a number");
+        }
+
+        if (file_put_contents($jobtxt, $content) !== false) {
+            echo "File '$jobtxt' created successfully.\n\n";
+        } else {
+            echo "Error creating file '$jobtxt'";
+        }
+    }
+
+    /**
+     * Generates a job.txt file depending on user input
+     * @param int number of jobs
+     * @return int length of generated thing
+     */
+    function generateFileHardcoded($getNumberOfJobs) {
+        // Generate job.txt file
+        $jobtxt = "job.txt";
+        $content = "";
 
         if (is_numeric($getNumberOfJobs)) {
             $numJobs = (int) $getNumberOfJobs;
@@ -184,11 +197,11 @@
     /**
      * Runs Round-Robin Algorithm
      * @param int quantum_slice int of ecah quantum time slice for the round robin algorithm
-     * @return string final_result string representation of a gantt chart
+     * @return array final_result array representation of a gantt chart
      */
-    function roundRobin(int $quantum_slice): string
+    function roundRobin(int $quantum_slice): array
     {
-        $final_result = '';
+        $final_result = [];
         // use queue to represent the round robin process
         $queue = new SplQueue();
         $file_handle = fopen('job.txt', 'r');
@@ -216,7 +229,8 @@
        
         // run round robin
 
-        $current_gantt_time = 0;
+        $current_time = 0;
+        $current_gantt_time = 0; //TODO: retunr array of end bound times instaed of string and then make a new calcRRTAT for it
 
         while (!$queue->isEmpty()) {
             // grab item at front of queue
@@ -226,12 +240,19 @@
              * else subtract the time slice from the job and place it to the end of the queue
              */
             if ($current_job['burst_time'] <= $quantum_slice) {
+                $prev_time = $current_time;
                 $next_time = $current_gantt_time + $current_job['original_burst_time'];
-                $final_result .= "[$current_gantt_time, $next_time]{$current_job['job_name']}\n";
+                $current_time += $current_job['burst_time'];
+                array_push($final_result, $current_time);
                 $current_gantt_time = $next_time;
+                echo $current_job['job_name'] . " Start: " . $prev_time . " Finish: " . $current_time . " Remaining: 0 JOB DONE!!\n";
             } else {
+                $prev_time = $current_time;
+                $current_time += $quantum_slice;
                 $current_job['burst_time'] -= $quantum_slice;
+                echo $current_job['job_name'] . " Start: " . $prev_time . " Finish: " . $current_time . " Remaining: " . $current_job['burst_time'] . "\n";
                 $queue->enqueue($current_job);
+                
             }
 
         }
@@ -248,5 +269,99 @@
     function _calcTime($startTime, $endTime): int
     {
         return $endTime - $startTime;
+    }
+
+    /**
+     * helper function to calculate turn around time for fcfs and sjf
+     * @param string the resulting string from the other functions
+     * @return float a float value of the turnaround time average
+     */
+    function _calcTAT($resultStr): float
+    {
+        $currIdx = 0;
+        $strlen = strlen($resultStr);
+        $array = [];
+        while ($currIdx < $strlen) {
+            // extracting the end bounds of each interval
+            $count = 1;
+            $substr = '';
+            if ($resultStr[$currIdx] == ',') {
+                while ($resultStr[$currIdx + $count] != ']') {
+                    $count++;
+                }
+                $substr = (int) trim(substr($resultStr, $currIdx + 1, $count - 1));
+            }
+            if ($substr != '')
+                array_push($array, $substr);
+
+            $currIdx++;
+        }   
+
+        return array_sum($array) / count($array);
+    }
+
+    /**
+     * helper function to calculate turn around time for round robin
+     * @param array the resulting array from the round robin function
+     * @return float a float value of the turnaround time average
+     */
+    function _calcRRTAT($resultArr): float
+    {
+        return array_sum($resultArr) / count($resultArr);
+    }
+
+    /**
+     * helper function to run extended amounts of FCFS
+     * @param int the number of times to run the algorithm
+     * @param int the number of jobs for the input file
+     */
+    function avgFCFS($loops, $lengthOfFile): void
+    {
+        $array = [];
+        for ($i = 0; $i < $loops; $i++) {
+            generateFileHardcoded($lengthOfFile);
+
+            $fcfs_res = FCFS();
+            array_push($array, _calcTAT($fcfs_res));
+        }
+
+        echo "AVG. TAT for FCFS: " . array_sum($array) / count($array);
+    }
+
+    /**
+     * helper function to run extended amounts of SJF
+     * @param int the number of times to run the algorithm
+     * @param int the number of jobs for the input file
+     */
+    function avgSJF($loops, $lengthOfFile): void
+    {
+        $array = [];
+        for ($i = 0; $i < $loops; $i++) {
+            generateFileHardcoded($lengthOfFile);
+
+            $sjf_res = SJF();
+            array_push($array, _calcTAT($sjf_res));
+        }
+
+        echo "AVG. TAT for SJF: " . array_sum($array) / count($array);
+    }
+
+    /**
+     * helper function to run extended amounts of RR
+     * @param int the number of times to run the algorithm
+     * @param int the number of jobs for the input file
+     * @param int the time slice values of round robin alg
+     */
+    function avgRR($loops, $lengthOfFile, $timeSlice): void
+    {
+        $array = [];
+        for ($i = 0; $i < $loops; $i++) {
+            generateFileHardcoded($lengthOfFile);
+
+            $rr = roundRobin($timeSlice);
+            array_push($array, _calcRRTAT($rr));
+        }
+
+        echo "AVG. TAT for RR w/ time slice = " . $timeSlice . ": " . array_sum($array) / count($array);
     }
 ?>
